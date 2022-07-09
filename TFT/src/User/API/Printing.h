@@ -27,6 +27,13 @@ typedef enum
   PAUSE_EXTERNAL,
 } PAUSE_TYPE;
 
+typedef enum
+{
+  PROG_FILE = 0, // file execution progress ()
+  PROG_TIME,     // time based progress (elapsed/total)
+  PROG_SLICER,   // progress from slicer (M73)
+} PROG_FROM;
+
 typedef struct
 {
   // data
@@ -52,7 +59,7 @@ void resumeAndContinue(void);
 void setPrintExpectedTime(uint32_t expectedTime);
 uint32_t getPrintExpectedTime(void);
 
-void setPrintTime(uint32_t elapsedTime);
+void updatePrintTime(uint32_t osTime);
 uint32_t getPrintTime(void);
 
 void setPrintRemainingTime(int32_t remainingTime);  // used for M73 Rxx and M117 Time Left xx
@@ -70,8 +77,10 @@ uint32_t getPrintCur(void);
 
 void setPrintProgress(float cur, float size);
 void setPrintProgressPercentage(uint8_t percentage);  // used by M73 Pxx
-bool updatePrintProgress(void);
+uint8_t updatePrintProgress(void);
 uint8_t getPrintProgress(void);
+PROG_FROM getPrintProgSource (void);
+void setPrintProgSource(PROG_FROM progressSource);
 
 void setPrintRunout(bool runout);
 bool getPrintRunout(void);
@@ -109,6 +118,7 @@ bool printPause(bool isPause, PAUSE_TYPE pauseType);
 
 bool isPrinting(void);
 bool isPaused(void);
+bool isAborted(void);
 bool isTFTPrinting(void);
 bool isHostPrinting(void);
 bool isRemoteHostPrinting(void);

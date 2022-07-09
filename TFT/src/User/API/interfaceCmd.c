@@ -49,10 +49,12 @@ bool isNotEmptyCmdQueue(void)
 bool isEnqueued(const CMD cmd)
 {
   bool found = false;
+
   for (int i = 0; i < infoCmd.count && !found; ++i)
   {
     found = strcmp(cmd, infoCmd.queue[(infoCmd.index_r + i) % CMD_QUEUE_SIZE].gcode) == 0;
   }
+
   return found;
 }
 
@@ -127,6 +129,7 @@ void mustStoreScript(const char * format, ...)
   char * p = script;
   uint16_t i = 0;
   CMD cmd;
+
   for (;;)
   {
     char c = *p++;
@@ -190,6 +193,7 @@ bool moveCacheToCmd(void)
   storeCmd("%s", infoCacheCmd.queue[infoCacheCmd.index_r].gcode);
   infoCacheCmd.count--;
   infoCacheCmd.index_r = (infoCacheCmd.index_r + 1) % CMD_QUEUE_SIZE;
+
   return true;
 }
 
@@ -232,8 +236,10 @@ bool sendCmd(bool purge, bool avoidTerminal)
     // dump serial data sent to debug port
     Serial_Puts(SERIAL_DEBUG_PORT, serialPort[cmd_port_index].id);  // serial port ID (e.g. "2" for SERIAL_PORT_2)
     Serial_Puts(SERIAL_DEBUG_PORT, ">>");
+
     if (purge)
       Serial_Puts(SERIAL_DEBUG_PORT, purgeStr);
+
     Serial_Puts(SERIAL_DEBUG_PORT, cmd_ptr);
   #endif
 
@@ -243,13 +249,15 @@ bool sendCmd(bool purge, bool avoidTerminal)
       Serial_Puts(SERIAL_PORT, cmd_ptr);
     else
       rrfSendCmd(cmd_ptr);
+
     setCurrentAckSrc(cmd_port_index);
   }
 
-  if (!avoidTerminal)
+  if (!avoidTerminal && MENU_IS(menuTerminal))
   {
     if (purge)
       terminalCache(purgeStr, strlen(purgeStr), cmd_port_index, SRC_TERMINAL_GCODE);
+
     terminalCache(cmd_ptr, cmd_len, cmd_port_index, SRC_TERMINAL_GCODE);
   }
 
@@ -288,6 +296,7 @@ static bool cmd_seen(char code)
       return true;
     }
   }
+
   return false;
 }
 
@@ -295,6 +304,17 @@ static bool cmd_seen(char code)
 static int32_t cmd_value(void)
 {
   return (strtol(&cmd_ptr[cmd_index], NULL, 10));
+}
+
+// Get the int after "/", if any.
+static int32_t cmd_second_value(void)
+{
+  char * secondValue = strchr(&cmd_ptr[cmd_index], '/');
+
+  if (secondValue != NULL)
+    return (strtol(secondValue + 1, NULL, 10));
+  else
+    return -0.5;
 }
 
 // Get the float after "code". Call after cmd_seen(code).
@@ -783,7 +803,9 @@ void sendQueueCmd(void)
           if (cmd_seen('R'))
           {
             setPrintRemainingTime((cmd_value() * 60));
-            setM73R_presence(true);  // disable parsing remaning time from gcode comments
+            setTimeFromSlicer(true);  // disable parsing remaning time from gcode comments
+            if (getPrintProgSource() == PROG_FILE && infoSettings.prog_source == 1)
+              setPrintProgSource(PROG_TIME);
           }
 
           if (!infoMachineSettings.buildPercent)  // if M73 is not supported by Marlin, skip it
@@ -893,9 +915,22 @@ void sendQueueCmd(void)
           break;
 
         case 117:  // M117
-          if (cmd_seen_from(cmd_base_index, "Time Left"))
+          if (cmd_seen_from(cmd_base_index, "Time Left"))  // parsing printing time left
           {
+            // format: Time Left <XX>h<YY>m<ZZ>s (e.g. Time Left 02h04m06s)
             parsePrintRemainingTime(&cmd_ptr[cmd_index]);  // cmd_index was set by cmd_seen_from function
+            setTimeFromSlicer(true);
+          }
+          else if (cmd_seen_from(cmd_base_index, "Layer Left"))  // parsing printing layer left
+          {
+            // format: Layer Left <XXXX>/<YYYY> (e.g. Layer Left 51/940)
+            setPrintLayerNumber(cmd_value());
+            setPrintLayerCount(cmd_second_value());
+          }
+          else if (cmd_seen_from(cmd_base_index, "Data Left"))  // parsing printing data left
+          {
+            // format: Data Left <XXXX>/<YYYY> (e.g. Data Left 123/12345)
+            setPrintProgress(cmd_value(), cmd_second_value());
           }
           else
           {
@@ -1064,6 +1099,12 @@ void sendQueueCmd(void)
             break;
         #endif
 
+        case 306:  // M306
+          if (getMpcTuningStatus() == REQUESTED && cmd_seen('T'))  // only if requested by GUI
+            setMpcTuningStatus(STARTED);
+
+          break;
+
         case 355:  // M355
           if (cmd_seen('S'))
             caseLightSetState(cmd_value() > 0);
@@ -1172,6 +1213,9 @@ void sendQueueCmd(void)
           if (cmd_value() == 914) param = P_BUMPSENSITIVITY;   // P_BUMPSENSITIVITY
 
           uint8_t i = (cmd_seen('I')) ? cmd_value() : 0;
+
+          if (i > 0)  // "X1"->0, "X2"->1, "Y1"->0, "Y2"->1, "Z1"->0, "Z2"->1, "Z3"->2, "Z4"->3
+            i--;
 
           if (cmd_seen('X')) setParameter(param, STEPPER_INDEX_X + i, cmd_value());
           if (cmd_seen('Y')) setParameter(param, STEPPER_INDEX_Y + i, cmd_value());
