@@ -13,12 +13,12 @@ static bool loadRequested = false;
 // set the hotend to the minimum extrusion temperature if user selected "OK"
 void extrudeMinTemp_OK(void)
 {
-  heatSetTargetTemp(tool_index, infoSettings.min_ext_temp);
+  heatSetTargetTemp(tool_index, infoSettings.min_ext_temp, FROM_GUI);
 }
 
 static inline void turnHeaterOff(void)
 {
-  heatSetTargetTemp(tool_index, 0);
+  heatSetTargetTemp(tool_index, 0, FROM_GUI);
   CLOSE_MENU();
 }
 
@@ -60,7 +60,7 @@ static inline void extrudeFilament(void)
   #else
     mustStoreCmd("G0 Z%.3f F%d\n", coordinateGetAxisActual(Z_AXIS) + infoSettings.pause_z_raise,
                  infoSettings.pause_feedrate[FEEDRATE_Z]);
-  #endif        
+  #endif
   // Move to pause location
   mustStoreCmd("G0 X%.3f Y%.3f F%d\n", infoSettings.pause_pos[X_AXIS], infoSettings.pause_pos[Y_AXIS],
                infoSettings.pause_feedrate[FEEDRATE_XY]);
@@ -112,7 +112,7 @@ void menuTuneExtruder(void)
     {
       case KEY_ICON_0:
       case KEY_DECREASE:
-        heatSetTargetTemp(tool_index, actTarget - degreeSteps[degreeSteps_index]);
+        heatSetTargetTemp(tool_index, actTarget - degreeSteps[degreeSteps_index], FROM_GUI);
         break;
 
       case KEY_INFOBOX:
@@ -120,7 +120,7 @@ void menuTuneExtruder(void)
         int16_t val = editIntValue(0, infoSettings.max_temp[tool_index], 0, actTarget);
 
         if (val != actTarget)
-          heatSetTargetTemp(tool_index, val);
+          heatSetTargetTemp(tool_index, val, FROM_GUI);
 
         temperatureReDraw(tool_index, NULL, false);
         break;
@@ -128,7 +128,7 @@ void menuTuneExtruder(void)
 
       case KEY_ICON_3:
       case KEY_INCREASE:
-        heatSetTargetTemp(tool_index, actTarget + degreeSteps[degreeSteps_index]);
+        heatSetTargetTemp(tool_index, actTarget + degreeSteps[degreeSteps_index], FROM_GUI);
         break;
 
       case KEY_ICON_4:
